@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-sample_pose_filter_from_videos_batch.py  (batch YOLO for speed)
+sample_pose_filter_from_videos_batch.py  (batch YOLO for speed).
 
 Based on the original sample_pose_filter_from_videos.py. fileciteturn0file0
 
@@ -27,29 +27,26 @@ Notes on speed:
 
 from __future__ import annotations
 
-import os
+import shutil
+import time
 from pathlib import Path
-from typing import List, Tuple, Dict, Optional
 
 import cv2
 import numpy as np
-from ultralytics import YOLO
 
 from fencer_heuristics import checkForFencer
-import shutil
-import time
-
+from ultralytics import YOLO
 
 # =========================
 # CONFIG
 # =========================
 # VIDEOS_DIR = Path("/media/yin/Seagate8T1/youtube_fencing/October_NAC_SaltLakeCityUT_2025_H264")            # input videos folder
 # VIDEOS_DIR = Path("/media/yin/Seagate8T1/youtube_fencing/fencing_list_001_H264")            # input videos folder  October_NAC_SaltLakeCityUT_2025_H264
-VIDEOS_DIR = Path("/media/yin/Seagate8T1/youtube_fencing/Fencing_MostlyFoilSuperPlaylist_h264")            # input videos folder
-OUT_DIR = VIDEOS_DIR/Path("sample_images")                  # per-video output root (used only if SAVE_ALL_FINAL_TO_ONE_FOLDER=False)
+VIDEOS_DIR = Path("/media/yin/Seagate8T1/youtube_fencing/Fencing_MostlyFoilSuperPlaylist_h264")  # input videos folder
+OUT_DIR = VIDEOS_DIR / Path("sample_images")  # per-video output root (used only if SAVE_ALL_FINAL_TO_ONE_FOLDER=False)
 
 SAVE_ALL_FINAL_TO_ONE_FOLDER = False
-GLOBAL_FINAL_DIR = VIDEOS_DIR/Path("final_all")         # where all final images go (when above is True)
+GLOBAL_FINAL_DIR = VIDEOS_DIR / Path("final_all")  # where all final images go (when above is True)
 
 # Model
 MODEL_PATH = "yolov8n-pose.pt"
@@ -59,11 +56,11 @@ BOX_CONF = 0.25
 MAX_PERSONS = 10  # number of top-conf people to consider
 
 # Sampling
-INTERVAL_SEC = 2.0               # constant sampling interval in seconds (increase for speed)
+INTERVAL_SEC = 2.0  # constant sampling interval in seconds (increase for speed)
 MAX_CANDIDATES_PER_VIDEO = 1000  # cap sampled frames per video
 
 # Batch inference
-BATCH_SIZE = 8                   # increase (8/16/32) for better throughput if GPU memory allows
+BATCH_SIZE = 8  # increase (8/16/32) for better throughput if GPU memory allows
 
 # Saving
 MIN_SAVE = 1
@@ -90,8 +87,8 @@ VIDEO_EXTS = {".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v"}
 # =========================
 # Utilities
 # =========================
-def list_videos(root: Path) -> List[Path]:
-    vids: List[Path] = []
+def list_videos(root: Path) -> list[Path]:
+    vids: list[Path] = []
     for p in root.rglob("*"):
         if p.is_file() and p.suffix.lower() in VIDEO_EXTS:
             vids.append(p)
@@ -116,39 +113,47 @@ def frame_corr(a_vec: np.ndarray, b_vec: np.ndarray) -> float:
 # =========================
 # Pose / fencer logic (from YOLO result)
 # =========================
-def make_pose(box_xyxy: np.ndarray, kxy: np.ndarray, kcf: np.ndarray, score: float, idx: int) -> Dict:
+def make_pose(box_xyxy: np.ndarray, kxy: np.ndarray, kcf: np.ndarray, score: float, idx: int) -> dict:
     x1, y1, x2, y2 = [float(v) for v in box_xyxy]
-    kpts: List[float] = []
+    kpts: list[float] = []
     for i in range(17):
         kpts.extend([float(kxy[i, 0]), float(kxy[i, 1]), float(kcf[i])])
     return {"box": [x1, y1, x2 - x1, y2 - y1], "keypoints": kpts, "score": float(score), "idx": int(idx)}
 
 
-def size_ok(pose: Dict, min_h: float = 80.0) -> bool:
+def size_ok(pose: dict, min_h: float = 80.0) -> bool:
     return float(pose["box"][3]) >= float(min_h)
 
 
 # Simple skeleton edges for debug visualization
 COCO17_EDGES = [
-    (0, 1), (0, 2), (1, 3), (2, 4),
+    (0, 1),
+    (0, 2),
+    (1, 3),
+    (2, 4),
     (5, 6),
-    (5, 7), (7, 9),
-    (6, 8), (8, 10),
-    (5, 11), (6, 12),
+    (5, 7),
+    (7, 9),
+    (6, 8),
+    (8, 10),
+    (5, 11),
+    (6, 12),
     (11, 12),
-    (11, 13), (13, 15),
-    (12, 14), (14, 16),
+    (11, 13),
+    (13, 15),
+    (12, 14),
+    (14, 16),
 ]
 
 
 def _draw_pose_overlay(
     frame_bgr: np.ndarray,
-    poses: List[Dict],
-    is_fencer: List[bool],
-    fencer_reasons: Optional[List[str]],
+    poses: list[dict],
+    is_fencer: list[bool],
+    fencer_reasons: list[str] | None,
     ok_frame: bool,
     reason: str,
-    corr_val: Optional[float] = None,
+    corr_val: float | None = None,
 ) -> np.ndarray:
     img = frame_bgr.copy()
 
@@ -181,7 +186,7 @@ def _draw_pose_overlay(
             ci = float(k[i * 3 + 2])
             pts.append((xi, yi, ci))
 
-        for (xi, yi, ci) in pts:
+        for xi, yi, ci in pts:
             if ci > 0.0:
                 cv2.circle(img, (int(xi), int(yi)), 3, (255, 255, 255), -1)
 
@@ -194,9 +199,9 @@ def _draw_pose_overlay(
     return img
 
 
-def evaluate_fencing_from_result(frame_bgr: np.ndarray, res) -> Tuple[bool, Dict]:
+def evaluate_fencing_from_result(frame_bgr: np.ndarray, res) -> tuple[bool, dict]:
     """Return (good, debug_dict) for a single frame, given a YOLO Result."""
-    dbg: Dict = {"reason": "", "poses": [], "is_fencer": []}
+    dbg: dict = {"reason": "", "poses": [], "is_fencer": []}
 
     if res is None or res.boxes is None or res.keypoints is None:
         dbg["reason"] = "no_boxes_or_keypoints"
@@ -213,7 +218,7 @@ def evaluate_fencing_from_result(frame_bgr: np.ndarray, res) -> Tuple[bool, Dict
 
     order = np.argsort(-confs)[:MAX_PERSONS]
 
-    poses: List[Dict] = []
+    poses: list[dict] = []
     for rank, i in enumerate(order):
         p = make_pose(boxes[i], kxy[i], kcf[i], confs[i], rank)
         if size_ok(p):
@@ -234,6 +239,7 @@ def evaluate_fencing_from_result(frame_bgr: np.ndarray, res) -> Tuple[bool, Dict
         fail_reasons = [r for (ok, r) in results if not ok]
         if fail_reasons:
             from collections import Counter
+
             c = Counter(fail_reasons)
             summary = ", ".join([f"{k}×{v}" for k, v in c.most_common()])
             dbg["reason"] = f"fencers_lt_2 ({sum(flags)}/{len(flags)}) | {summary}"
@@ -289,7 +295,6 @@ def run() -> None:
             shutil.rmtree(OUT_DIR)
         OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-
     model = YOLO(MODEL_PATH)
 
     vid_pre = time.perf_counter()
@@ -318,7 +323,7 @@ def run() -> None:
         if est_samples > MAX_CANDIDATES_PER_VIDEO:
             interval_sec = duration / MAX_CANDIDATES_PER_VIDEO
 
-        stride = max(1, int(round(fps * interval_sec)))
+        stride = max(1, round(fps * interval_sec))
 
         # Output location
         if SAVE_ALL_FINAL_TO_ONE_FOLDER:
@@ -338,8 +343,8 @@ def run() -> None:
         prev_saved_vec = None
 
         # Batch buffers
-        batch_frames: List[np.ndarray] = []
-        batch_meta: List[Tuple[int, float]] = []  # (frame_idx, t_sec)
+        batch_frames: list[np.ndarray] = []
+        batch_meta: list[tuple[int, float]] = []  # (frame_idx, t_sec)
 
         frame_idx = -1
 
