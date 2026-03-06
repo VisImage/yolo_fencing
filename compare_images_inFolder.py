@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from pathlib import Path
-from itertools import combinations
+import argparse
 import shutil
 import time
-import argparse
+from itertools import combinations
+from pathlib import Path
+
 import cv2
 import numpy as np
 
@@ -53,8 +54,7 @@ WORKFLOW:
 
 # ---------- CORE ----------
 def list_images(folder: Path) -> list[Path]:
-    return [p for p in folder.rglob("*")
-            if p.is_file() and p.suffix.lower() in IMG_EXTS]
+    return [p for p in folder.rglob("*") if p.is_file() and p.suffix.lower() in IMG_EXTS]
 
 
 def load_gray_vector(path: Path, size: tuple[int, int]) -> np.ndarray:
@@ -76,8 +76,8 @@ def _fmt_time(sec: float) -> str:
     if sec < 60:
         return f"{sec:.1f}s"
     if sec < 3600:
-        return f"{sec/60:.1f}m"
-    return f"{sec/3600:.1f}h"
+        return f"{sec / 60:.1f}m"
+    return f"{sec / 3600:.1f}h"
 
 
 def build_pairs_gray(folder: Path, top_k: int):
@@ -102,7 +102,7 @@ def build_pairs_gray(folder: Path, top_k: int):
     if n2 < 2:
         return []
 
-    print(f"[INFO] Feature extraction done in {_fmt_time(time.time()-t0)}")
+    print(f"[INFO] Feature extraction done in {_fmt_time(time.time() - t0)}")
 
     total_pairs = n2 * (n2 - 1) // 2
     print(f"[INFO] Comparing {total_pairs:,} pairs (Pearson correlation)...")
@@ -110,8 +110,7 @@ def build_pairs_gray(folder: Path, top_k: int):
     results = []
 
     if tqdm:
-        for (p1, v1), (p2, v2) in tqdm(combinations(items, 2),
-                                       total=total_pairs, unit="pair", desc="Pairs"):
+        for (p1, v1), (p2, v2) in tqdm(combinations(items, 2), total=total_pairs, unit="pair", desc="Pairs"):
             results.append((pearson_corr(v1, v2), p1, p2))
     else:
         start = time.time()
@@ -124,12 +123,11 @@ def build_pairs_gray(folder: Path, top_k: int):
             if now - last >= PROGRESS_EVERY_SECONDS:
                 rate = done / (now - start)
                 remain = (total_pairs - done) / rate if rate > 0 else float("inf")
-                print(f"[PROGRESS] {done:,}/{total_pairs:,} "
-                      f"({done/total_pairs*100:.1f}%) ETA={_fmt_time(remain)}")
+                print(f"[PROGRESS] {done:,}/{total_pairs:,} ({done / total_pairs * 100:.1f}%) ETA={_fmt_time(remain)}")
                 last = now
 
     results.sort(key=lambda x: x[0], reverse=True)
-    return results[:max(top_k, 1)]
+    return results[: max(top_k, 1)]
 
 
 # ---------- DISPLAY ----------
@@ -144,17 +142,16 @@ def resize_to_fit(img: np.ndarray, max_w: int, max_h: int) -> np.ndarray:
     h, w = img.shape[:2]
     scale = min(max_w / max(w, 1), max_h / max(h, 1), 1.0)
     if scale < 1.0:
-        img = cv2.resize(img, (int(w * scale), int(h * scale)),
-                         interpolation=cv2.INTER_AREA)
+        img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
     return img
 
 
 def pad_to_same_height(left: np.ndarray, right: np.ndarray):
     h = max(left.shape[0], right.shape[0])
     if left.shape[0] < h:
-        left = cv2.copyMakeBorder(left, 0, h-left.shape[0], 0, 0, cv2.BORDER_CONSTANT)
+        left = cv2.copyMakeBorder(left, 0, h - left.shape[0], 0, 0, cv2.BORDER_CONSTANT)
     if right.shape[0] < h:
-        right = cv2.copyMakeBorder(right, 0, h-right.shape[0], 0, 0, cv2.BORDER_CONSTANT)
+        right = cv2.copyMakeBorder(right, 0, h - right.shape[0], 0, 0, cv2.BORDER_CONSTANT)
     return left, right
 
 
@@ -171,9 +168,7 @@ def overlay_help(img: np.ndarray) -> np.ndarray:
     out = img.copy()
     y = 30
     for line in lines:
-        cv2.putText(out, line, (10, y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.75,
-                    (0, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(out, line, (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 255), 2, cv2.LINE_AA)
         y += 26
     return out
 
@@ -209,18 +204,22 @@ def interactive_review(pairs, folder: Path):
             continue
 
         while True:
-            img1 = resize_to_fit(read_for_display(p1),
-                                  MAX_DISPLAY_SIZE[0]//2, MAX_DISPLAY_SIZE[1])
-            img2 = resize_to_fit(read_for_display(p2),
-                                  MAX_DISPLAY_SIZE[0]//2, MAX_DISPLAY_SIZE[1])
+            img1 = resize_to_fit(read_for_display(p1), MAX_DISPLAY_SIZE[0] // 2, MAX_DISPLAY_SIZE[1])
+            img2 = resize_to_fit(read_for_display(p2), MAX_DISPLAY_SIZE[0] // 2, MAX_DISPLAY_SIZE[1])
             img1, img2 = pad_to_same_height(img1, img2)
 
             joined = np.hstack([img1, img2])
 
-            cv2.putText(joined, f"Pearson corr: {score:.4f}",
-                        (10, joined.shape[0]-10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8,
-                        (0, 255, 255), 2, cv2.LINE_AA)
+            cv2.putText(
+                joined,
+                f"Pearson corr: {score:.4f}",
+                (10, joined.shape[0] - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (0, 255, 255),
+                2,
+                cv2.LINE_AA,
+            )
 
             if show_help:
                 joined = overlay_help(joined)
@@ -254,8 +253,7 @@ def interactive_review(pairs, folder: Path):
 
 def main():
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("-h", "--help-only", action="store_true",
-                        help="Show help text and exit")
+    parser.add_argument("-h", "--help-only", action="store_true", help="Show help text and exit")
     args, _ = parser.parse_known_args()
 
     if args.help_only:
