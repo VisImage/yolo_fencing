@@ -1,26 +1,28 @@
 # Shi Jan. 4, 2026
 
-
 ## installation and configuration
-1) git clone git@github.com:VisImage/ultralytics.git
-2) conda create -n yolo_fencing python=3.10
-3) conda activate yolo_fencing
-4) cd ultralytics
-5) pip install -e .  //it will take a while to download large Navida files
 
+1. git clone git@github.com:VisImage/ultralytics.git
+2. conda create -n yolo_fencing python=3.10
+3. conda activate yolo_fencing
+4. cd ultralytics
+5. pip install -e . //it will take a while to download large Navida files
 
 ## training data collection used in Jan. 2026
-1) prepare video files: download from youtube playlist videoProc download's limit is 2000 videos
-2) Sample video to images using piste_image_from_videos.py
-3) Visual exam the images and delete non-proper for training. each image need to be MANUALLY annotated
-4) Check similarity using compare_images_inFolder.py, for further sample cleaning.
-5) Annotation using labelme_fencing
+
+1. prepare video files: download from youtube playlist videoProc download's limit is 2000 videos
+2. Sample video to images using piste_image_from_videos.py
+3. Visual exam the images and delete non-proper for training. each image need to be MANUALLY annotated
+4. Check similarity using compare_images_inFolder.py, for further sample cleaning.
+5. Annotation using labelme_fencing
 
 ### piste_image_from_videos.py: Description
+
 This program extracts high-quality training images from fencing videos using **YOLOv8 pose detection** with batch inference for speed. It scans all videos in a specified directory, samples frames at a fixed time interval, and runs pose detection on those frames in GPU batches. A frame is kept only if **at least two valid fencers** are detected, based on pose keypoints (e.g., ankle visibility and confidence) evaluated by custom heuristics. An optional **correlation filter** prevents saving near-duplicate frames. The script can save results either per video or into a single global folder and can optionally generate debug images that visualize poses and explain why frames were accepted or rejected.
 So far, the pose info is used for sampling. A piste detection can be used for piste data collection in the recursive process
 
 ### piste_image_from_videos.py: Usage
+
 1. Open the script and edit the **CONFIG** section at the top.
 2. Set `VIDEOS_DIR` to the folder containing your fencing videos. All subfolders will be scanned automatically.
 3. Choose the output mode:
@@ -30,29 +32,28 @@ So far, the pose info is used for sampling. A piste detection can be used for pi
    - `INTERVAL_SEC` controls how often frames are sampled (larger = faster, fewer frames).
    - `BATCH_SIZE` controls YOLO batch inference size (increase if GPU memory allows).
 5. Run the script:
-   ```bash
+
+   ````bash
    python piste_sample_from_videos.py
 
-### compare_images_inFolder.py: Description
-This script helps you **find and remove near-duplicate images** in a folder using **grayscale Pearson correlation**. It scans a directory recursively, resizes images to a fixed size, and computes pairwise similarity scores for all image pairs (O(N²)). The **Top-K most similar pairs** are then shown in an interactive OpenCV window for visual inspection. You decide which images to keep or remove. By default, removed images are **safely moved** to a `_deleted/` subfolder. The script includes progress reporting, interactive on-screen help, and a command-line help-only mode.
+    compare_images_inFolder.py: Description
+   s script helps you **find and remove near-duplicate images** in a folder using **grayscale Pearson correlation**. It scans a directory recursively, resizes images to a fixed size, and computes pairwise similarity scores for all image pairs (O(N²)). The **Top-K most similar pairs** are then shown in an interactive OpenCV window for visual inspection. You decide which images to keep or remove. By default, removed images are **safely moved** to a `_deleted/` subfolder. The script includes progress reporting, interactive on-screen help, and a command-line help-only mode.
 
-### compare_images_inFolder.py: Usage
-1. Open the script and edit the **CONFIG** section.
-2. Set the working directory:
+    compare_images_inFolder.py: Usage
+   Open the script and edit the **CONFIG** section.
+   Set the working directory:
    ```python
    WORK_DIR = Path(r"/path/to/your/images")
-3. python compare_images_inFolder.py -h  // print usage guide
+   ````
 
+6. python compare_images_inFolder.py -h // print usage guide
 
 ## piste training and inference
-1) yolo obb train model=yolov8n-obb.pt data=fencing_obb_sample_dataset/data.yaml imgsz=1024 epochs=100 batch=8 device=0
-2) yolo obb predict model=runs/obb/train/weights/best.pt source=fencing_obb_sample_dataset/test_images save=True
 
+1. yolo obb train model=yolov8n-obb.pt data=fencing_obb_sample_dataset/data.yaml imgsz=1024 epochs=100 batch=8 device=0
+2. yolo obb predict model=runs/obb/train/weights/best.pt source=fencing_obb_sample_dataset/test_images save=True
 
-The training result is stored in /runs/obb/train or train1 .. The folder name is automatically created by yolo training program. So make sure in step 7), the model=folder corresponding to a successful trainig. The prediction result is stored in runs/obb/predict
-
-
-
+The training result is stored in /runs/obb/train or train1 .. The folder name is automatically created by yolo training program. So make sure in step 7), the model=folder corresponding to a successful training. The prediction result is stored in runs/obb/predict
 
 <div align="center">
   <p>
